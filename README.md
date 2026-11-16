@@ -4,16 +4,11 @@ Microsserviço de produtos (Java 25 / Spring Boot 4.1). Dono do schema `products
 
 Enunciado: <https://insper.github.io/platform/2026.2/exercises/product/>
 
-## Estado: boilerplate
+## Estado da implementação local
 
-| Pronto | Seu (`TODO(product)`) |
-|---|---|
-| Rotas HTTP, status, `Location`, validação dos DTOs | Regras de negócio em [`ProductService`](src/main/java/store/product/ProductService.java) |
-| Tabela + migração Flyway, entidade JPA, repositório | Regra de preço (ex.: `price > 0` → senão 400), 404 para id inexistente |
-| Actuator, Prometheus, OpenAPI, Docker, Compose, k8s, CI/CD | Decidir `DELETE` de id inexistente: 404 ou 204 idempotente |
-| | Opcionais do enunciado: busca por nome, papéis (admin cria/apaga), cache Redis |
+CRUD implementado em `ProductService`, com nomes/unidades normalizados, preço estritamente positivo e 404 para consulta/exclusão de identificador inexistente. Os testes de contrato estão ativos. Busca por nome, papéis administrativos e cache de produtos não fazem parte desta implementação.
 
-Enquanto não implementados, os métodos respondem **501 Not Implemented**. Os testes em [`ProductContractTest`](src/test/java/store/product/ProductContractTest.java) descrevem o comportamento esperado e estão com `@Disabled`: remova a anotação de cada um conforme implementar.
+A validação integrada usa o Compose da raiz do agregador. Essa alteração local ainda precisa ser publicada no repositório do serviço antes de atualizar o gitlink.
 
 ## Contrato HTTP
 
@@ -77,3 +72,5 @@ O banco `store` precisa existir; o Flyway cria o schema e a tabela. Pode ser o m
 ## Uso de IA
 
 O boilerplate deste repositório (estrutura, configuração, camada HTTP, persistência, testes de contrato desabilitados, Docker/k8s/CI) foi gerado com assistência de IA (Claude) e revisado pela equipe. As regras de negócio marcadas `TODO(product)` são implementadas pela equipe. Registre aqui o que cada integrante fez.
+
+A implementação funcional e a ativação dos testes nesta revisão foram feitas com assistência do Codex em 16/11/2026. As referências a TODO no histórico de geração acima descrevem o boilerplate original.

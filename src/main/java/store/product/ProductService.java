@@ -1,6 +1,9 @@
 package store.product;
 
 import java.util.List;
+import java.util.UUID;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,11 +12,7 @@ import store.product.api.ProductIn;
 import store.product.api.ProductOut;
 
 /**
- * Business rules for products. The HTTP layer (ProductResource) and persistence
- * (ProductModel, ProductRepository, Flyway) are ready; every method below is yours.
- *
- * <p>Until implemented, each method answers 501 Not Implemented. The disabled tests in
- * ProductContractTest describe the expected behavior: enable them one by one.
+ * Product persistence with positive USD prices.
  */
 @Service
 public class ProductService {
@@ -26,38 +25,31 @@ public class ProductService {
 
     @Transactional
     public ProductOut create(ProductIn in) {
-        // TODO(product): implement product creation.
-        //  1. Trim name and unit before saving.
-        //  2. Enforce your price rule (e.g. price > 0) -> 400 BAD_REQUEST.
-        //     order-service treats a negative price as "service unavailable" (503), so never store one.
-        //  3. Save new ProductModel(UUID.randomUUID().toString(), ..., OffsetDateTime.now(ZoneOffset.UTC))
-        //     and return model.toOut().
-        throw todo("create product");
+        if (in.price().signum() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Price must be positive");
+        }
+        return repository.save(new ProductModel(UUID.randomUUID().toString(), in.name().trim(),
+            in.price(), in.unit().trim(), OffsetDateTime.now(ZoneOffset.UTC))).toOut();
     }
 
     @Transactional(readOnly = true)
     public List<ProductOut> findAll() {
-        // TODO(product): return every product as ProductOut.
-        //  Optional (course): filter by name ("like") through a query parameter.
-        throw todo("list products");
+        return repository.findAll().stream().map(ProductModel::toOut).toList();
     }
 
     @Transactional(readOnly = true)
     public ProductOut findById(String id) {
-        // TODO(product): repository.findById(id) -> 404 NOT_FOUND when absent.
-        //  order-service relies on this 404: it turns it into "400 Product does not exist".
-        throw todo("find product by id");
+        return find(id).toOut();
     }
 
     @Transactional
     public void delete(String id) {
-        // TODO(product): delete the product; decide between 404 or idempotent 204 when absent.
-        //  Orders keep their own price snapshot, so deleting a product does not change past orders.
-        throw todo("delete product");
+        repository.delete(find(id));
     }
 
-    private static ResponseStatusException todo(String what) {
-        return new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "TODO: " + what);
+    private ProductModel find(String id) {
+        return repository.findById(id).orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
     }
 
 }
