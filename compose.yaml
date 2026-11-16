@@ -1,0 +1,47 @@
+name: store-product
+services:
+  product:
+    build: .
+    ports:
+    - 127.0.0.1:${HTTP_PORT:-8085}:8080
+    environment:
+      DATABASE_HOST: product-db
+      DATABASE_PORT: '5432'
+      DATABASE_DB: ${DB_NAME:-store}
+      DATABASE_USERNAME: ${DB_USER:-store}
+      DATABASE_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/init-env.py}
+    networks:
+    - backend
+    - services
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:9091/actuator/health/readiness]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    depends_on:
+      product-db:
+        condition: service_healthy
+  product-db:
+    image: postgres:17
+    networks:
+    - backend
+    environment:
+      POSTGRES_USER: ${DB_USER:-store}
+      POSTGRES_DB: ${DB_NAME:-store}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run python3 scripts/init-env.py}
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+networks:
+  backend: {}
+  # Shared with the other store services (docker network create store-dev).
+  services:
+    name: store-dev
+    external: true
+volumes:
+  postgres-data: {}

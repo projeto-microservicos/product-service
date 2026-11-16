@@ -1,0 +1,15 @@
+# Copy to config.local.yaml (git-ignored), set real values and apply once:
+#   kubectl -n store apply -f k8s/config.local.yaml
+# The Secret "product-secrets" (DATABASE_USERNAME, DATABASE_PASSWORD) is created separately;
+# see README, "Deploy".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-config
+data:
+  SERVER_PORT: '8080'
+  MANAGEMENT_PORT: '9091'
+  DATABASE_HOST: REPLACE_WITH_RDS_ENDPOINT
+  DATABASE_PORT: '5432'
+  DATABASE_DB: store
+  DATABASE_SSLMODE: require

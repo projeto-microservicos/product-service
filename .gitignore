@@ -1,0 +1,14 @@
+target/
+.venv*/
+__pycache__/
+.env
+.env.*
+!.env.example
+*.log
+*.class
+*.jar
+.idea/
+.vscode/
+release/
+k8s/*.local.yaml
+*.secret.env

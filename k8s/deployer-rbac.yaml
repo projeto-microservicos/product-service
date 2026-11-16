@@ -1,0 +1,37 @@
+# Lets the GitHub Actions deploy role (Kubernetes group "github-deployer",
+# mapped through an EKS access entry) roll out ONLY this service in its namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-deployer-product
+rules:
+- apiGroups: [apps]
+  resources: [deployments]
+  verbs: [get, list, watch, create, patch, update]
+- apiGroups: ['']
+  resources: [services]
+  verbs: [get, create, patch, update]
+- apiGroups: ['']
+  resources: [pods]
+  verbs: [get, list]
+- apiGroups: ['']
+  resources: [configmaps]
+  resourceNames: [product-config]
+  verbs: [get]
+- apiGroups: ['']
+  resources: [secrets]
+  resourceNames: [product-secrets]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-deployer-product
+subjects:
+- kind: Group
+  name: github-deployer
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: github-deployer-product
+  apiGroup: rbac.authorization.k8s.io

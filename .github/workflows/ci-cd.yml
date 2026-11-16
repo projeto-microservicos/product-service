@@ -1,0 +1,105 @@
+name: CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  SERVICE: product
+  ECR_REPOSITORY: product-service
+  REQUIRES_SECRET: 'true'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Unit and integration tests
+        run: mvn -B -ntp verify
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+      - name: Build container
+        run: docker build -t store/${{ env.SERVICE }}-service:ci .
+      - name: Validate development Compose
+        run: python3 scripts/init-env.py && docker compose config --quiet
+
+  # Runs only on main and only after the AWS side is prepared:
+  # set the repository variable AWS_ROLE_ARN (Settings > Secrets and variables > Actions).
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AWS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+      K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE || 'store' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$REGISTRY/$ECR_REPOSITORY:$tag"
+          docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$image" .
+          docker push "$image"
+          digest=$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$tag" --query 'imageDetails[0].imageDigest' --output text)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "ECR did not return a digest"; exit 1; }
+          echo "repository=$REGISTRY/$ECR_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Deploy to EKS
+        env:
+          REPOSITORY: ${{ steps.image.outputs.repository }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          kube="kubectl --namespace=$K8S_NAMESPACE --request-timeout=30s"
+          # ConfigMap/Secret are prepared once by an operator; the pipeline never overwrites them.
+          $kube get configmap "$SERVICE-config" -o name
+          if [ "$REQUIRES_SECRET" = true ]; then $kube get secret "$SERVICE-secrets" -o name; fi
+          mkdir -p release && cp k8s/k8s.yaml release/
+          cat > release/kustomization.yaml <<EOF
+          resources: [k8s.yaml]
+          namespace: $K8S_NAMESPACE
+          images:
+            - name: store/$SERVICE-service
+              newName: $REPOSITORY
+              digest: $DIGEST
+          EOF
+          kubectl kustomize release > release/deployment.yaml
+          $kube apply -f release/deployment.yaml
+          if ! $kube rollout status "deployment/$SERVICE" --timeout=300s; then
+            $kube get pods -l "app=$SERVICE" -o wide || true
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-manifest
+          path: release/deployment.yaml
+          if-no-files-found: ignore
