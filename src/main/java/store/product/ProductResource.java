@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import store.product.api.ProductIn;
 import store.product.api.ProductOut;
@@ -34,9 +35,10 @@ public class ProductResource {
         return ResponseEntity.created(URI.create("/products/" + created.id())).body(created);
     }
 
+    /** {@code GET /products}, or {@code GET /products?name=tom} to search by part of the name. */
     @GetMapping
-    public List<ProductOut> findAll() {
-        return service.findAll();
+    public List<ProductOut> findAll(@RequestParam(required = false) String name) {
+        return service.findAll(name);
     }
 
     @GetMapping("/{id}")

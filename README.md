@@ -4,25 +4,26 @@ Microsserviço de produtos (Java 25 / Spring Boot 4.1). Dono do schema `products
 
 Enunciado: <https://insper.github.io/platform/2026.2/exercises/product/>
 
-## Estado: boilerplate
+## Estado
 
-| Pronto | Seu (`TODO(product)`) |
-|---|---|
-| Rotas HTTP, status, `Location`, validação dos DTOs | Regras de negócio em [`ProductService`](src/main/java/store/product/ProductService.java) |
-| Tabela + migração Flyway, entidade JPA, repositório | Regra de preço (ex.: `price > 0` → senão 400), 404 para id inexistente |
-| Actuator, Prometheus, OpenAPI, Docker, Compose, k8s, CI/CD | Decidir `DELETE` de id inexistente: 404 ou 204 idempotente |
-| | Opcionais do enunciado: busca por nome, papéis (admin cria/apaga), cache Redis |
+CRUD implementado em [`ProductService`](src/main/java/store/product/ProductService.java) e coberto por [`ProductContractTest`](src/test/java/store/product/ProductContractTest.java):
 
-Enquanto não implementados, os métodos respondem **501 Not Implemented**. Os testes em [`ProductContractTest`](src/test/java/store/product/ProductContractTest.java) descrevem o comportamento esperado e estão com `@Disabled`: remova a anotação de cada um conforme implementar.
+- preço em USD, **maior que zero** (senão 400), guardado com 2 casas;
+- nome e unidade sem espaços nas pontas;
+- id inexistente: **404** em `GET` e `DELETE`; o id não diferencia maiúsculas, como o `order-service` aceita;
+- opcional do enunciado: busca por parte do nome, sem diferenciar maiúsculas (`GET /products?name=`).
+
+Pendentes, opcionais do enunciado: papéis (admin cria/apaga) e cache Redis.
 
 ## Contrato HTTP
 
 | Método e caminho | Resultado |
 |---|---|
-| `POST /products` | 201 + `Location`; corpo `{"name","price","unit"}` → `{"id","name","price","unit"}`; inválido 400 |
-| `GET /products` | 200; lista de produtos |
+| `POST /products` | 201 + `Location`; corpo `{"name","price","unit"}` → `{"id","name","price","unit"}`; inválido ou `price <= 0` 400 |
+| `GET /products` | 200; lista ordenada por nome |
+| `GET /products?name=tom` | 200; só os que contêm `tom` no nome, sem diferenciar maiúsculas |
 | `GET /products/{id}` | 200; inexistente 404 (o `order-service` transforma em 400 "Product does not exist") |
-| `DELETE /products/{id}` | 204 |
+| `DELETE /products/{id}` | 204; inexistente 404 |
 | `GET /products/health-check` | 200 |
 
 `price` é em USD, com no máximo 2 casas decimais (`NUMERIC(19,2)`). Swagger em `/swagger-ui/index.html`. Saúde e métricas na porta privada 9091 (`/actuator/health`, `/actuator/prometheus`).
@@ -65,15 +66,10 @@ O pipeline não cria nem sobrescreve configuração ou segredos:
 kubectl -n store apply -f k8s/deployer-rbac.yaml
 cp k8s/config.example.yaml k8s/config.local.yaml   # preencha o endpoint do RDS
 kubectl -n store apply -f k8s/config.local.yaml
-read -rsp 'Senha do RDS: ' DB_PASSWORD; echo
-# printf é builtin do shell: a senha não aparece na lista de processos
-printf 'DATABASE_USERNAME=store\nDATABASE_PASSWORD=%s\n' "$DB_PASSWORD" |
-  kubectl -n store create secret generic product-secrets --from-env-file=/dev/stdin
-unset DB_PASSWORD
 ```
 
-O banco `store` precisa existir; o Flyway cria o schema e a tabela. Pode ser o mesmo RDS do `account-service` e do `order-service`: cada serviço usa o próprio schema.
+No EKS do projeto, o Secret `product-secrets` e o usuário do banco `product_svc` são criados pelo bootstrap do RDS (fora deste repositório). O usuário é dono do schema `products` e não tem `CREATE` no banco, então o schema precisa existir antes; o Flyway cria só a tabela. O RDS (`store`) é o mesmo de `account-service` e `order-service`, e cada serviço tem o próprio usuário e schema. O RDS exige TLS: mantenha `DATABASE_SSLMODE=require`.
 
 ## Uso de IA
 
-O boilerplate deste repositório (estrutura, configuração, camada HTTP, persistência, testes de contrato desabilitados, Docker/k8s/CI) foi gerado com assistência de IA (Claude) e revisado pela equipe. As regras de negócio marcadas `TODO(product)` são implementadas pela equipe. Registre aqui o que cada integrante fez.
+O boilerplate deste repositório (estrutura, configuração, camada HTTP, persistência, testes de contrato, Docker/k8s/CI) foi gerado com assistência de IA (Claude) e revisado pela equipe. As regras de negócio do `ProductService` (criação com regra de preço, listagem e busca por nome, busca por id e exclusão) também foram escritas pelo Claude, em 17/11/2026, por decisão do João, que revisou e é o responsável pelo serviço. Registre aqui o que cada integrante fez.
