@@ -26,7 +26,7 @@ Pendentes, opcionais do enunciado: papéis (admin cria/apaga) e cache Redis.
 | `DELETE /products/{id}` | 204; inexistente 404 |
 | `GET /products/health-check` | 200 |
 
-`price` é em USD, com no máximo 2 casas decimais (`NUMERIC(19,2)`). Swagger em `/swagger-ui/index.html`. Saúde e métricas na porta privada 9091 (`/actuator/health`, `/actuator/prometheus`).
+`price` é em USD, com no máximo 2 casas decimais (`NUMERIC(19,2)`). Swagger em `/swagger-ui/index.html`. As probes de startup e liveness do Kubernetes chamam `GET /products/health-check`, como pede o `Overview.md`. A readiness e as métricas ficam na porta privada 9091 (`/actuator/health/readiness`, `/actuator/prometheus`).
 
 ## Rodar
 
