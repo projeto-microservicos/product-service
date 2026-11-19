@@ -14,8 +14,7 @@ import org.springframework.web.client.RestClient;
 import store.product.api.ProductIn;
 import store.product.api.ProductOut;
 
-/**
- * Product CRUD contract and price validation. */
+/** Executable specification of ProductService (create, list/search, find, delete). */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     "management.server.port=0",
     "spring.datasource.url=jdbc:h2:mem:products-contract;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
@@ -81,6 +80,46 @@ class ProductContractTest {
     void unknownIdIs404SoOrderServiceCanAnswer400() {
         assertThatThrownBy(() -> api().get().uri("/products/{id}", UUID.randomUUID()).retrieve().toBodilessEntity())
             .isInstanceOf(HttpClientErrorException.NotFound.class);
+    }
+
+    @Test
+    void deletingAnUnknownIdIs404() {
+        assertThatThrownBy(() -> api().delete().uri("/products/{id}", UUID.randomUUID()).retrieve().toBodilessEntity())
+            .isInstanceOf(HttpClientErrorException.NotFound.class);
+    }
+
+    @Test
+    void priceKeepsTwoDecimalsFromCreationToReads() {
+        var created = create("Onion", "3.5");
+        assertThat(created.price()).isEqualTo(new BigDecimal("3.50"));
+        assertThat(api().get().uri("/products/{id}", created.id()).retrieve().body(ProductOut.class)).isEqualTo(created);
+    }
+
+    @Test
+    void blankNameListsEverything() {
+        var created = create("Garlic " + UUID.randomUUID(), "2.00");
+        var all = api().get().uri(u -> u.path("/products").queryParam("name", " ").build()).retrieve()
+            .body(new ParameterizedTypeReference<java.util.List<ProductOut>>() {});
+        assertThat(all).contains(created);
+    }
+
+    @Test
+    void idLookupIgnoresCaseLikeOrderServiceDoes() {
+        var created = create("Pepper", "1.20");
+        assertThat(api().get().uri("/products/{id}", created.id().toUpperCase()).retrieve().body(ProductOut.class))
+            .isEqualTo(created);
+    }
+
+    @Test
+    void searchByPartOfTheNameIgnoresCase() {
+        String tag = UUID.randomUUID().toString().substring(0, 8);
+        var cherry = create("Cherry tomato " + tag, "4.00");
+        var roma = create("ROMA TOMATO " + tag, "3.00");
+        create("Cheese " + tag, "1.00");
+
+        var found = api().get().uri(u -> u.path("/products").queryParam("name", "tomato " + tag).build()).retrieve()
+            .body(new ParameterizedTypeReference<java.util.List<ProductOut>>() {});
+        assertThat(found).containsExactly(cherry, roma);
     }
 
 }

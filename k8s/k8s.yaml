@@ -45,21 +45,27 @@ spec:
           limits:
             cpu: 1000m
             memory: 768Mi
+        # Overview.md: the orchestrator's probes call GET /products/health-check.
         startupProbe:
           httpGet:
-            path: /actuator/health/liveness
-            port: 9091
+            path: /products/health-check
+            port: http
+          timeoutSeconds: 3
           failureThreshold: 60
           periodSeconds: 5
+        # Same threads as the traffic: generous timeout so a busy pod is not restarted under load.
         livenessProbe:
           httpGet:
-            path: /actuator/health/liveness
-            port: 9091
+            path: /products/health-check
+            port: http
+          timeoutSeconds: 5
+          failureThreshold: 4
           periodSeconds: 15
+        # Readiness stays on the actuator: it goes OUT_OF_SERVICE during graceful shutdown.
         readinessProbe:
           httpGet:
             path: /actuator/health/readiness
-            port: 9091
+            port: management
           periodSeconds: 5
 ---
 apiVersion: v1
